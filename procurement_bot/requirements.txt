@@ -1,0 +1,9 @@
+pandas
+openpyxl
+pdfminer.six
+python-docx
+pyautogui
+plyer
+spacy
+selenium
+playwright
