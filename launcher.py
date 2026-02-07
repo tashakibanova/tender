@@ -139,97 +139,6 @@ class LauncherApp:
 
         columns = ("title", "price", "deadline", "platform", "action")
         self.tenders_table = ttk.Treeview(self.monitor_frame, columns=columns, show="headings", height=6)
-"""LauncherPanel: стартовая панель для демонстрации модулей платформы.
-
-Запуск: python launcher.py
-Требуется только стандартная библиотека Python (Tkinter).
-"""
-
-from __future__ import annotations
-
-import importlib
-import json
-from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
-import tkinter as tk
-
-
-APP_TITLE = "LauncherPanel"
-STATE_FILE = "launcher_state.json"
-CONFIG_FILE = "launcher_config.json"
-SEARCH_PARAMS_FILE = "search_parameters.json"
-ORGANIZATIONS_DIR = "organizations"
-
-
-class LauncherPanel:
-    """Стартовая панель (заглушка) для тестирования первых модулей."""
-
-    def __init__(self, root: tk.Tk) -> None:
-        self.root = root
-        self.base_path = Path(__file__).resolve().parent
-        self.organizations_path = self.base_path / ORGANIZATIONS_DIR
-        self.organizations_path.mkdir(exist_ok=True)
-
-        self.state = self._load_state()
-        self.config = self._load_config()
-
-        self.active_inn = self.state.get("active_inn") or ""
-        self._setup_window()
-        self._build_ui()
-        self._load_organizations()
-        self._maybe_prompt_first_org()
-
-    def _setup_window(self) -> None:
-        self.root.title(self._build_title())
-        width, height = self.state.get("window_size", [900, 700])
-        self.root.geometry(f"{width}x{height}")
-        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
-
-    def _build_ui(self) -> None:
-        self.root.configure(padx=16, pady=16)
-        self._build_organization_block()
-        self._build_search_block()
-        self._build_monitoring_block()
-        self._build_manual_block()
-        self._build_log_block()
-
-    def _build_organization_block(self) -> None:
-        frame = tk.LabelFrame(self.root, text="Организация", padx=8, pady=8)
-        frame.pack(fill="x", pady=6)
-
-        tk.Label(frame, text="Выберите организацию").pack(side="left")
-        self.org_var = tk.StringVar(value="Выберите организацию")
-        self.org_menu = ttk.Combobox(frame, textvariable=self.org_var, state="readonly", width=30)
-        self.org_menu.pack(side="left", padx=8)
-        self.org_menu.bind("<<ComboboxSelected>>", self._on_org_selected)
-
-        tk.Button(frame, text="Добавить организацию", command=self._create_organization).pack(
-            side="right"
-        )
-
-    def _build_search_block(self) -> None:
-        frame = tk.LabelFrame(self.root, text="Настройки поиска", padx=8, pady=8)
-        frame.pack(fill="x", pady=6)
-
-        tk.Button(
-            frame,
-            text="Открыть параметры поиска",
-            command=self._open_search_params_editor,
-        ).pack(side="left", padx=4)
-        tk.Button(frame, text="Сбросить к умолчаниям", command=self._reset_search_params).pack(
-            side="left", padx=4
-        )
-
-    def _build_monitoring_block(self) -> None:
-        frame = tk.LabelFrame(self.root, text="Мониторинг закупок", padx=8, pady=8)
-        frame.pack(fill="both", expand=True, pady=6)
-
-        tk.Button(frame, text="Запустить мониторинг", command=self._run_monitoring).pack(
-            anchor="w", pady=4
-        )
-
-        columns = ("title", "price", "deadline", "platform", "action")
-        self.tenders_table = ttk.Treeview(frame, columns=columns, show="headings", height=6)
         self.tenders_table.heading("title", text="Название")
         self.tenders_table.heading("price", text="НМЦК")
         self.tenders_table.heading("deadline", text="Дата окончания")
@@ -267,11 +176,8 @@ class LauncherPanel:
             self.org_var.set(organizations[0])
 
     def _maybe_prompt_first_org(self) -> None:
-        if not any(self.organizations_path.iterdir()):
-            if messagebox.askyesno(
-                "Организация",
-                "Папка организаций пуста. Создать первую организацию?",
-            ):
+        if os.path.isdir(self.organizations_path) and not os.listdir(self.organizations_path):
+            if messagebox.askyesno("Организация", "Папка организаций пуста. Создать первую организацию?"):
                 self._create_organization()
 
     def _on_org_selected(self, _event=None) -> None:
@@ -434,45 +340,6 @@ class LauncherPanel:
         if not self._ensure_active_inn():
             return
         tenders = self._call_module_function("modules.tender_monitor", "find_tenders", [self.active_inn], default=[])
-            self.root.title(self._build_title())
-            self._log(f"Загружена организация: {selection}")
-
-    def _create_organization(self) -> None:
-        self._log("Создание организации...")
-        self._call_module(
-            "modules.organization_manager",
-            "OrganizationManager",
-            "create_profile",
-        )
-        self._load_organizations()
-
-    def _open_search_params_editor(self) -> None:
-        self._call_module(
-            "modules.tender_monitor",
-            "TenderMonitor",
-            "open_search_params_editor",
-        )
-
-    def _reset_search_params(self) -> None:
-        params_path = self.base_path / SEARCH_PARAMS_FILE
-        params_path.write_text(
-            json.dumps({"keywords": [], "price_min": "", "price_max": ""}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        self._log("Параметры поиска сброшены к умолчаниям.")
-
-    def _run_monitoring(self) -> None:
-        if not self.active_inn:
-            messagebox.showwarning("Организация", "Сначала выберите организацию.")
-            return
-        self._log(f"Запуск мониторинга для ИНН {self.active_inn}...")
-        tenders = self._call_module(
-            "modules.tender_monitor",
-            "TenderMonitor",
-            "find_new_tenders",
-            self.active_inn,
-            default=[],
-        )
         self._render_tenders(tenders)
         self._log(f"Найдено лотов: {len(tenders)}")
 
@@ -481,14 +348,16 @@ class LauncherPanel:
             self.tenders_table.delete(item)
         for tender in tenders:
             tender_id = tender.get("id", "")
-            title = tender.get("title", "")
-            price = tender.get("price", "")
-            deadline = tender.get("deadline", "")
-            platform = tender.get("platform", "")
             self.tenders_table.insert(
                 "",
                 "end",
-                values=(title, price, deadline, platform, "Анализ ТЗ"),
+                values=(
+                    tender.get("title", ""),
+                    tender.get("price", ""),
+                    tender.get("deadline", ""),
+                    tender.get("platform", ""),
+                    "Анализ ТЗ",
+                ),
                 tags=(tender_id,),
             )
 
@@ -496,93 +365,113 @@ class LauncherPanel:
         item_id = self.tenders_table.identify_row(event.y)
         if not item_id:
             return
-        values = self.tenders_table.item(item_id, "values")
-        if not values:
-            return
-        tender_id = self.tenders_table.item(item_id, "tags")[0] if self.tenders_table.item(item_id, "tags") else ""
-        if values[-1] == "Анализ ТЗ":
-            self._call_module(
+        tender_id = ""
+        tags = self.tenders_table.item(item_id, "tags")
+        if tags:
+            tender_id = tags[0]
+        if tender_id:
+            self._call_module_function(
                 "modules.specification_analyzer",
-                "TenderSpecificationAnalyzer",
                 "open_analysis_window",
-                tender_id,
+                [tender_id, self.active_inn],
+                default=None,
             )
 
     def _manual_entry(self) -> None:
-        files = filedialog.askopenfilenames(title="Выберите файлы закупки")
+        if not self._ensure_active_inn():
+            return
+        files = filedialog.askopenfilenames(
+            title="Выберите файлы закупки",
+            filetypes=[
+                ("Документы", "*.pdf *.docx *.xlsx *.xls *.jpg *.jpeg *.png *.zip"),
+                ("Все файлы", "*.*"),
+            ],
+        )
         if not files:
             return
-        self._call_module(
+        result = self._call_module_function(
             "modules.manual_tender_entry",
-            "ManualTenderEntry",
-            "process_uploaded_files",
-            list(files),
+            "process_files",
+            [list(files), self.active_inn],
+            default=None,
         )
+        if isinstance(result, dict):
+            tender_id = result.get("tender_id") or result.get("id")
+            if tender_id:
+                self._call_module_function(
+                    "modules.specification_analyzer",
+                    "open_analysis_window",
+                    [tender_id, self.active_inn],
+                    default=None,
+                )
 
-    def _call_module(self, module_path: str, class_name: str, method: str, *args, default=None):
+    def _call_module_function(self, module_name: str, func_name: str, args: list, default=None):
         try:
-            module = importlib.import_module(module_path)
-            target_class = getattr(module, class_name)
-            target_method = getattr(target_class, method)
-            return target_method(*args)
+            module = __import__(module_name, fromlist=[func_name])
+            func = getattr(module, func_name)
+            return func(*args)
         except ModuleNotFoundError:
-            message = f"Модуль не найден: {module_path}"
-            self._log(message)
-            messagebox.showerror("Ошибка модуля", message)
+            self._log(
+                f"Ошибка: модуль {module_name} не найден. Убедитесь, что папка /modules/ существует."
+            )
         except AttributeError:
-            message = f"Не найден метод {class_name}.{method}"
-            self._log(message)
-            messagebox.showerror("Ошибка модуля", message)
-        except Exception as exc:  # noqa: BLE001 - логируем для диагностики
-            message = f"Ошибка обработки: {exc}"
-            self._log(message)
-            messagebox.showerror("Ошибка", message)
+            self._log(f"Ошибка: функция {func_name} не найдена в модуле {module_name}.")
+        except Exception as exc:
+            self._log(f"Ошибка обработки: {exc}")
         return default
 
-    def _log(self, message: str) -> None:
-        if not self.log_text:
-            return
-        self.log_text.configure(state="normal")
-        self.log_text.insert("end", f"{message}\n")
-        self.log_text.configure(state="disabled")
-        self.log_text.see("end")
+    def _update_action_state(self) -> None:
+        enabled = bool(self.active_inn)
+        state = "normal" if enabled else "disabled"
+        self.search_button.configure(state=state)
+        self.monitor_button.configure(state=state)
+        self.manual_button.configure(state=state)
+        self.view_profile_button.configure(state=state)
+        self.edit_profile_button.configure(state=state)
 
-    def _load_state(self) -> dict:
-        path = self.base_path / STATE_FILE
-        if not path.exists():
-            return {}
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return {}
+    def _ensure_active_inn(self) -> bool:
+        if not self.active_inn:
+            messagebox.showwarning("Организация", "Сначала выберите организацию.")
+            return False
+        return True
 
-    def _load_config(self) -> dict:
-        path = self.base_path / CONFIG_FILE
-        if not path.exists():
-            return {"mode": "demo"}
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return {"mode": "demo"}
-
-    def _build_title(self) -> str:
-        if self.active_inn:
-            return f"{APP_TITLE} — ИНН {self.active_inn}"
-        return APP_TITLE
+    def _load_state(self) -> None:
+        path = os.path.join(self.base_path, STATE_FILE)
+        data = self._read_json(path)
+        if isinstance(data, dict):
+            self.active_inn = data.get("active_inn", "")
 
     def _on_close(self) -> None:
-        self.state["active_inn"] = self.active_inn
-        self.state["window_size"] = [self.root.winfo_width(), self.root.winfo_height()]
-        (self.base_path / STATE_FILE).write_text(
-            json.dumps(self.state, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        state = {"active_inn": self.active_inn, "updated_at": datetime.now().isoformat()}
+        path = os.path.join(self.base_path, STATE_FILE)
+        self._write_json(path, state)
         self.root.destroy()
+
+    def _read_json(self, path: str):
+        if not os.path.exists(path):
+            return None
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                return json.load(handle)
+        except (json.JSONDecodeError, OSError):
+            return None
+
+    def _write_json(self, path: str, data) -> None:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2)
+
+    def _log(self, message: str) -> None:
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self.log_text.configure(state="normal")
+        self.log_text.insert("end", f"[{timestamp}] {message}\n")
+        self.log_text.configure(state="disabled")
+        self.log_text.see("end")
 
 
 def main() -> None:
     root = tk.Tk()
-    LauncherPanel(root)
+    LauncherApp(root)
     root.mainloop()
 
 
