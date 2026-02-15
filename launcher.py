@@ -339,12 +339,7 @@ class LauncherApp:
     def _run_monitoring(self) -> None:
         if not self._ensure_active_inn():
             return
-        tenders = self._call_module_function(
-            "modules.tender_monitor",
-            "find_new_tenders",
-            [self.active_inn],
-            default=[],
-        )
+        tenders = self._call_module_function("modules.tender_monitor", "find_tenders", [self.active_inn], default=[])
         self._render_tenders(tenders)
         self._log(f"Найдено лотов: {len(tenders)}")
 
@@ -396,7 +391,7 @@ class LauncherApp:
             return
         result = self._call_module_function(
             "modules.manual_tender_entry",
-            "process_uploaded_files",
+            "process_files",
             [list(files), self.active_inn],
             default=None,
         )

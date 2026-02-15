@@ -15,7 +15,6 @@ class TenderMonitor:
     ORGANIZATIONS_DIR = os.path.join(BASE_DIR, "organizations")
 
     SEARCH_PARAMS_FILE = "search_parameters.json"
-    SEARCH_KEYWORDS_FILE = "search_keywords.json"
     PROFILE_FILE = "profile.json"
     LOTS_DIR = "lots"
     REGISTRY_FILE = "registry.json"
@@ -57,7 +56,6 @@ class TenderMonitor:
         """Имитирует поиск лотов: фильтрует входящие и сохраняет в реестр."""
         search_params = cls.load_search_params(inn)
         profile = cls._load_profile(inn)
-        search_params = cls._merge_keywords(search_params, inn)
         candidates = cls._load_candidate_tenders(inn)
         filtered = cls.filter_tenders(candidates, search_params, datetime.now(), profile)
         saved = cls._save_registry(inn, filtered)
@@ -111,31 +109,6 @@ class TenderMonitor:
         }
 
     @classmethod
-    def _merge_keywords(cls, search_params: dict, inn: str) -> dict:
-        keywords = cls._load_search_keywords(inn)
-        if not keywords:
-            return search_params
-        params = dict(search_params)
-        tools_and_terms = list(params.get("tools_and_terms", []))
-        for item in keywords:
-            term = item.get("term")
-            if term and term not in tools_and_terms:
-                tools_and_terms.append(term)
-        params["tools_and_terms"] = tools_and_terms
-        search_modes = list(params.get("search_modes", []))
-        for item in keywords:
-            if item.get("mode"):
-                search_modes.append(
-                    {
-                        "term": item.get("term", ""),
-                        "mode": item.get("mode", "exact_in_text"),
-                        "distance": item.get("distance", 1),
-                    }
-                )
-        params["search_modes"] = search_modes
-        return params
-
-    @classmethod
     def _load_profile(cls, inn: str) -> dict:
         profile_path = os.path.join(cls._org_dir(inn), cls.PROFILE_FILE)
         if not os.path.exists(profile_path):
@@ -160,45 +133,6 @@ class TenderMonitor:
             return []
         with open(incoming_path, "r", encoding="utf-8") as file:
             return json.load(file)
-
-    @classmethod
-    def _load_search_keywords(cls, inn: str) -> list[dict]:
-        keywords_path = os.path.join(cls._org_dir(inn), cls.SEARCH_KEYWORDS_FILE)
-        if not os.path.exists(keywords_path):
-            return []
-        with open(keywords_path, "r", encoding="utf-8") as file:
-            data = json.load(file)
-        if isinstance(data, list):
-            return [{"term": str(item), "mode": "exact_in_text"} for item in data]
-        if isinstance(data, dict):
-            if "terms" in data and isinstance(data["terms"], list):
-                parsed = []
-                for item in data["terms"]:
-                    if isinstance(item, dict):
-                        parsed.append(
-                            {
-                                "term": item.get("term", ""),
-                                "mode": cls._normalize_mode(item.get("mode")),
-                                "distance": item.get("distance", 1),
-                            }
-                        )
-                    else:
-                        parsed.append({"term": str(item), "mode": "exact_in_text"})
-                return parsed
-            if "keywords" in data and isinstance(data["keywords"], list):
-                return [{"term": str(item), "mode": "exact_in_text"} for item in data["keywords"]]
-        return []
-
-    @staticmethod
-    def _normalize_mode(mode: str | None) -> str:
-        mapping = {
-            "exact": "exact_in_text",
-            "nearby": "nearby_words",
-            "any_ending": "any_ending",
-            "exact_in_text": "exact_in_text",
-            "nearby_words": "nearby_words",
-        }
-        return mapping.get(mode or "", "exact_in_text")
 
     @classmethod
     def _save_registry(cls, inn: str, tenders: list[dict]) -> list[dict]:
