@@ -1,0 +1,13 @@
+{
+  "platforms": [
+    {
+      "name": "zakupki.gov.ru",
+      "search_url": "https://zakupki.gov.ru",
+      "search_path": "/epz/order/extendedsearch/results.html?searchString={query}",
+      "engine": "playwright",
+      "enabled": true
+    }
+  ],
+  "search_interval_minutes": 60,
+  "result_limit": 5
+}
